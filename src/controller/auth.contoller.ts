@@ -135,3 +135,17 @@ export const Refresh = async (req: Request, res: Response) => {
         })
     }
 }
+
+export const Logout = async (req: Request, res: Response) => {
+
+    res.clearCookie('refresh_token');
+    res.clearCookie('access_token');
+
+    // ? Alternative
+    /* 
+        res.cookie('access_token', '', {maxAge: 0});
+        res.cookie('refresh_token', '', {maxAge: 0});
+    */
+
+    res.status(204).send(null);
+}
