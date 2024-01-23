@@ -105,3 +105,33 @@ export const AuthenticatedUser = async (req: Request, res: Response) => {
     }
 
 }
+
+export const Refresh = async (req: Request, res: Response) => {
+    try {
+        const cookie = req.cookies['refresh_token'];
+
+        const payload: any = verify(cookie, process.env.JWT_SECRET_REFRESH);
+
+        if (!payload) {
+            return res.status(401).send({
+                message: "Unauthenticated"
+            })
+        }
+
+        const accessToken = sign({ id: payload.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+
+        res.cookie('access_token', accessToken, {
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000
+        });
+
+        res.send({
+            message: "Success"
+        })
+    } catch (error) {
+        logger.error(error.message)
+        return res.status(400).send({
+            message: "Unauthenticated"
+        })
+    }
+}
