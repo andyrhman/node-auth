@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { Register } from "./controller/auth.contoller";
+import { Login, Register } from "./controller/auth.contoller";
 
 const routes = (router: Router) => {
-    router.get('/api/login', Register)
+    router.post('/api/register', Register);
+    router.post('/api/login', Login);
 }
 
 export default routes;
