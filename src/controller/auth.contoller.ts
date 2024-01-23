@@ -3,7 +3,7 @@ import { User } from "../entity/user.entity";
 import logger from "../config/logger";
 import myDataSource from "../config/data-source";
 import * as argon2 from 'argon2'
-import { sign } from "jsonwebtoken";
+import { sign, verify } from "jsonwebtoken";
 
 export const Register = async (req: Request, res: Response) => {
     try {
@@ -38,38 +38,70 @@ export const Register = async (req: Request, res: Response) => {
 }
 
 export const Login = async (req: Request, res: Response) => {
-    const body = req.body;
+    try {
+        const body = req.body;
 
-    const repository = myDataSource.getRepository(User);
+        const repository = myDataSource.getRepository(User);
 
-    const user = await repository.findOne({ where: { email: body.email } });
+        const user = await repository.findOne({ where: { email: body.email } });
 
-    if (!user) {
-        return res.status(400).send({ message: "Invalid Credentials" })
+        if (!user) {
+            return res.status(400).send({ message: "Invalid Credentials" })
+        }
+
+        if (!await argon2.verify(user.password, body.password)) {
+            return res.status(400).send({ message: "Invalid Credentials" })
+        }
+
+        const accessToken = sign({ id: user.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+
+        const refreshToken = sign({ id: user.id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
+
+        res.cookie('access_token', accessToken, {
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000
+        });
+
+        res.cookie('refresh_token', refreshToken, {
+            httpOnly: true,
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        })
+
+        res.send({
+            message: "Successfully logged in"
+        });
+    } catch (error) {
+        logger.error(error.message)
+        return res.status(500).send({ message: error.message })
+    }
+}
+
+export const AuthenticatedUser = async (req: Request, res: Response) => {
+    try {
+        const cookie = req.cookies['access_token'];
+
+        const payload: any = verify(cookie, process.env.JWT_SECRET_ACCESS);
+
+        if (!payload) {
+            return res.status(401).send({
+                message: "Unauthenticated"
+            })
+        }
+
+        const user = await myDataSource.getRepository(User).findOne({ where: { id: payload.id } })
+
+        if (!user) {
+            return res.status(401).send({
+                message: "Unauthenticated"
+            })
+        }
+        const { password, ...data } = user
+        res.send(data);
+    } catch (error) {
+        logger.error(error.message)
+        return res.status(400).send({
+            message: "Unauthenticated"
+        })
     }
 
-    if (!await argon2.verify(user.password, body.password)) {
-        return res.status(400).send({ message: "Invalid Credentials" })
-    }
-
-    const accessToken = sign({id: user.id}, process.env.JWT_SECRET_ACCESS, {expiresIn: '30s'});
-
-    const refreshToken = sign({id: user.id}, process.env.JWT_SECRET_REFRESH, {expiresIn: '1w'});
-
-    res.cookie('access_token', accessToken, {
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 & 1000
-    });
-
-    res.cookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        maxAge: 7* 24 * 60 * 60 & 1000
-    })
-
-    // const { password, ...data } = user;
-
-    res.send({
-        accessToken,
-        refreshToken
-    });
 }
