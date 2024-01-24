@@ -8,6 +8,7 @@ import { sign, verify } from "jsonwebtoken";
 import { Token } from "../entity/token.entity";
 import { MoreThanOrEqual } from "typeorm";
 import { isUUID } from "class-validator";
+import { OAuth2Client } from "google-auth-library";
 
 export const Register = async (req: Request, res: Response) => {
     try {
@@ -248,4 +249,62 @@ export const Logout = async (req: Request, res: Response) => {
     */
 
     res.status(204).send(null);
+}
+
+export const GoogleAuth = async (req: Request, res: Response) => {
+    // ? Google auth logic
+    const { token } = req.body;
+
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+    const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+        return res.status(401).send({
+            message: "Unauhtenticated"
+        })
+    }
+
+    const repository = myDataSource.getRepository(User);
+
+    let user = await repository.findOne({ where: { email: payload.email } });
+
+    if (!user) {
+        user = await repository.save({
+            first_name: payload.given_name,
+            last_name: payload.family_name,
+            email: payload.email,
+            password: await argon2.hash(token)
+        })
+    }
+
+    // ? For storing refresh token in the cookie and database
+    const accessToken = sign({ id: user.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+
+    const refreshToken = sign({ id: user.id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
+
+    // Determine the expiration time for the new refresh token based on rememberMe
+    const newRefreshTokenExpiration = req.body.rememberMe
+        ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
+        : new Date(Date.now() + 30 * 1000); // 30 seconds from now
+
+    await myDataSource.getRepository(Token).save({
+        user_id: user.id,
+        token: refreshToken,
+        expired_at: newRefreshTokenExpiration
+    })
+
+    res.cookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        expires: newRefreshTokenExpiration
+    })
+
+    res.send({
+        token: accessToken
+    });
 }
