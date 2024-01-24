@@ -23,9 +23,14 @@ export const Register = async (req: Request, res: Response) => {
             return res.status(400).send({ message: "Email has already exist" })
         }
 
+        if (await repository.findOne({ where: { username: body.username.toLowerCase() } })) {
+            return res.status(400).send({ message: "Email has already exist" })
+        }
+
         const { password, tfa_secret, ...user } = await repository.save({
             first_name: body.first_name,
             last_name: body.last_name,
+            username: body.username.toLowerCase(),
             email: body.email.toLowerCase(),
             password: await argon2.hash(body.password)
         });
@@ -46,7 +51,7 @@ export const Login = async (req: Request, res: Response) => {
 
         const repository = myDataSource.getRepository(User);
 
-        const user = await repository.findOne({ where: { email: body.email } });
+        const user = await repository.findOne({ where: { username: body.username } });
 
         if (!user) {
             return res.status(400).send({ message: "Invalid Credentials" })
@@ -127,7 +132,7 @@ export const TwoFactor = async (req: Request, res: Response) => {
         // Determine the expiration time for the new refresh token based on rememberMe
         const newRefreshTokenExpiration = req.body.rememberMe
             ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
-            : new Date(Date.now() + 30 * 1000); // 30 seconds from now
+            : new Date(Date.now() + 24 * 60 * 60 * 1000); // 30 seconds from now
 
         await myDataSource.getRepository(Token).save({
             user_id: id,
@@ -146,7 +151,7 @@ export const TwoFactor = async (req: Request, res: Response) => {
 
     } catch (error) {
         logger.error(error.message)
-        return res.status(400).send({
+        return res.status(401).send({
             message: "Unauthenticated"
         })
     }
@@ -154,7 +159,7 @@ export const TwoFactor = async (req: Request, res: Response) => {
 
 export const AuthenticatedUser = async (req: Request, res: Response) => {
     try {
-        // ? alternative --> const accessToken = req.headers.authorization.replace('Bearer ', '');
+        // const accessToken = req.headers.authorization.replace('Bearer ', '');
         const accessToken = req.header('Authorization')?.split(' ')[1] || '';
 
         const payload: any = verify(accessToken, process.env.JWT_SECRET_ACCESS);
@@ -165,7 +170,7 @@ export const AuthenticatedUser = async (req: Request, res: Response) => {
             })
         }
 
-        const { password, tfa_secret, ...user } = await myDataSource.getRepository(User).findOne({ where: { id: payload.id } })
+        const user = await myDataSource.getRepository(User).findOne({ where: { id: payload.id } })
 
         if (!user) {
             return res.status(401).send({
@@ -173,10 +178,12 @@ export const AuthenticatedUser = async (req: Request, res: Response) => {
             })
         }
 
-        res.send(user);
+        const { password, tfa_secret, ...data } = user
+
+        res.send(data);
     } catch (error) {
         logger.error(error.message)
-        return res.status(400).send({
+        return res.status(401).send({
             message: "Unauthenticated"
         })
     }
@@ -229,7 +236,7 @@ export const Refresh = async (req: Request, res: Response) => {
         })
     } catch (error) {
         logger.error(error.message)
-        return res.status(400).send({
+        return res.status(401).send({
             message: "Unauthenticated"
         })
     }
@@ -291,7 +298,7 @@ export const GoogleAuth = async (req: Request, res: Response) => {
     // Determine the expiration time for the new refresh token based on rememberMe
     const newRefreshTokenExpiration = req.body.rememberMe
         ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
-        : new Date(Date.now() + 30 * 1000); // 30 seconds from now
+        : new Date(Date.now() + 24 * 60 * 60 * 1000); // 30 seconds from now
 
     await myDataSource.getRepository(Token).save({
         user_id: user.id,
