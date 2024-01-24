@@ -4,6 +4,8 @@ import logger from "../config/logger";
 import myDataSource from "../config/data-source";
 import * as argon2 from 'argon2'
 import { sign, verify } from "jsonwebtoken";
+import { Token } from "../entity/token.entity";
+import { MoreThanOrEqual } from "typeorm";
 
 export const Register = async (req: Request, res: Response) => {
     try {
@@ -57,10 +59,14 @@ export const Login = async (req: Request, res: Response) => {
 
         const refreshToken = sign({ id: user.id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
 
-        res.cookie('access_token', accessToken, {
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000
-        });
+        const expired_at = new Date()
+        expired_at.setDate(expired_at.getDate() + 7)
+
+        await myDataSource.getRepository(Token).save({
+            user_id: user.id,
+            token: refreshToken,
+            expired_at
+        })
 
         res.cookie('refresh_token', refreshToken, {
             httpOnly: true,
@@ -68,7 +74,7 @@ export const Login = async (req: Request, res: Response) => {
         })
 
         res.send({
-            message: "Successfully logged in"
+            token: accessToken
         });
     } catch (error) {
         logger.error(error.message)
@@ -78,9 +84,10 @@ export const Login = async (req: Request, res: Response) => {
 
 export const AuthenticatedUser = async (req: Request, res: Response) => {
     try {
-        const cookie = req.cookies['access_token'];
+        // ? alternative --> const accessToken = req.headers.authorization.replace('Bearer ', '');
+        const accessToken = req.header('Authorization')?.split(' ')[1] || '';
 
-        const payload: any = verify(cookie, process.env.JWT_SECRET_ACCESS);
+        const payload: any = verify(accessToken, process.env.JWT_SECRET_ACCESS);
 
         if (!payload) {
             return res.status(401).send({
@@ -118,15 +125,23 @@ export const Refresh = async (req: Request, res: Response) => {
             })
         }
 
-        const accessToken = sign({ id: payload.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
-
-        res.cookie('access_token', accessToken, {
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000
+        const refreshToken = await myDataSource.getRepository(Token).findOne({
+            where: {
+                user_id: payload.id,
+                expired_at: MoreThanOrEqual(new Date())
+            }
         });
 
+        if (!refreshToken) {
+            return res.status(401).send({
+                message: "Unauthenticated"
+            })
+        }
+
+        const accessToken = sign({ id: payload.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+
         res.send({
-            message: "Success"
+            token: accessToken
         })
     } catch (error) {
         logger.error(error.message)
@@ -137,9 +152,11 @@ export const Refresh = async (req: Request, res: Response) => {
 }
 
 export const Logout = async (req: Request, res: Response) => {
+    await myDataSource.getRepository(Token).delete({
+        token: req.cookies["refresh_token"]
+    })
 
     res.clearCookie('refresh_token');
-    res.clearCookie('access_token');
 
     // ? Alternative
     /* 
