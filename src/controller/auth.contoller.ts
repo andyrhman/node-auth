@@ -3,6 +3,7 @@ import { User } from "../entity/user.entity";
 import logger from "../config/logger";
 import myDataSource from "../config/data-source";
 import * as argon2 from 'argon2'
+import * as speakeasy from 'speakeasy'
 import { sign, verify } from "jsonwebtoken";
 import { Token } from "../entity/token.entity";
 import { MoreThanOrEqual } from "typeorm";
@@ -20,16 +21,14 @@ export const Register = async (req: Request, res: Response) => {
             return res.status(400).send({ message: "Email has already exist" })
         }
 
-        const user = await repository.save({
+        const { password, tfa_secret, ...user } = await repository.save({
             first_name: body.first_name,
             last_name: body.last_name,
             email: body.email.toLowerCase(),
             password: await argon2.hash(body.password)
         });
 
-        const { password, ...data } = user
-
-        res.status(201).send(data);
+        res.status(201).send(user);
 
     } catch (error) {
         logger.error(error.message)
@@ -55,27 +54,21 @@ export const Login = async (req: Request, res: Response) => {
             return res.status(400).send({ message: "Invalid Credentials" })
         }
 
-        const accessToken = sign({ id: user.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+        if (user.tfa_secret) {
+            return res.send({
+                id: user.id
+            })
+        }
 
-        const refreshToken = sign({ id: user.id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
-
-        const expired_at = new Date()
-        expired_at.setDate(expired_at.getDate() + 7)
-
-        await myDataSource.getRepository(Token).save({
-            user_id: user.id,
-            token: refreshToken,
-            expired_at
-        })
-
-        res.cookie('refresh_token', refreshToken, {
-            httpOnly: true,
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        })
+        const secret = speakeasy.generateSecret({
+            name: 'My App'
+        });
 
         res.send({
-            token: accessToken
-        });
+            id: user.id,
+            secret: secret.ascii,
+            otpauth_url: secret.otpauth_url
+        })
     } catch (error) {
         logger.error(error.message)
         return res.status(500).send({ message: error.message })
@@ -95,15 +88,15 @@ export const AuthenticatedUser = async (req: Request, res: Response) => {
             })
         }
 
-        const user = await myDataSource.getRepository(User).findOne({ where: { id: payload.id } })
+        const { password, tfa_secret, ...user } = await myDataSource.getRepository(User).findOne({ where: { id: payload.id } })
 
         if (!user) {
             return res.status(401).send({
                 message: "Unauthenticated"
             })
         }
-        const { password, ...data } = user
-        res.send(data);
+
+        res.send(user);
     } catch (error) {
         logger.error(error.message)
         return res.status(400).send({
@@ -111,6 +104,30 @@ export const AuthenticatedUser = async (req: Request, res: Response) => {
         })
     }
 
+}
+
+export const TwoFactor = async (req: Request, res: Response) => {
+    // const accessToken = sign({ id: user.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+
+    // const refreshToken = sign({ id: user.id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
+
+    // const expired_at = new Date()
+    // expired_at.setDate(expired_at.getDate() + 7)
+
+    // await myDataSource.getRepository(Token).save({
+    //     user_id: user.id,
+    //     token: refreshToken,
+    //     expired_at
+    // })
+
+    // res.cookie('refresh_token', refreshToken, {
+    //     httpOnly: true,
+    //     maxAge: 7 * 24 * 60 * 60 * 1000
+    // })
+
+    // res.send({
+    //     token: accessToken
+    // });
 }
 
 export const Refresh = async (req: Request, res: Response) => {
