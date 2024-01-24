@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { AuthenticatedUser, Login, Logout, QR, Refresh, Register } from "./controller/auth.contoller";
+import { AuthenticatedUser, Login, Logout, QR, Refresh, Register, TwoFactor } from "./controller/auth.contoller";
 import { ForgotPassword, ResetPassword } from "./controller/forgot.controller";
 
 const routes = (router: Router) => {
     router.post('/api/register', Register);
     router.post('/api/login', Login);
+    router.post('/api/two-factor', TwoFactor);
     router.get('/api/user', AuthenticatedUser);
     router.post('/api/refresh', Refresh);
     router.post('/api/logout', Logout);

@@ -7,6 +7,7 @@ import * as speakeasy from 'speakeasy';
 import { sign, verify } from "jsonwebtoken";
 import { Token } from "../entity/token.entity";
 import { MoreThanOrEqual } from "typeorm";
+import { isUUID } from "class-validator";
 
 export const Register = async (req: Request, res: Response) => {
     try {
@@ -54,9 +55,12 @@ export const Login = async (req: Request, res: Response) => {
             return res.status(400).send({ message: "Invalid Credentials" })
         }
 
+        const shouldRemember = !!req.body.rememberMe;
+
         if (user.tfa_secret) {
             return res.send({
-                id: user.id
+                id: user.id,
+                rememberMe: shouldRemember,
             })
         }
 
@@ -66,12 +70,84 @@ export const Login = async (req: Request, res: Response) => {
 
         res.send({
             id: user.id,
+            rememberMe: shouldRemember,
             secret: secret.ascii,
             otpauth_url: secret.otpauth_url
         })
     } catch (error) {
         logger.error(error.message)
         return res.status(500).send({ message: error.message })
+    }
+}
+
+export const TwoFactor = async (req: Request, res: Response) => {
+    if (!isUUID(req.body.id)) {
+        return res.status(400).send({
+            message: "Invalid Credentials"
+        })
+    }
+    try {
+        // ? For 2FA auth
+        const id = req.body.id;
+
+        const repository = myDataSource.getRepository(User);
+
+        const user = await repository.findOne({ where: { id: id } });
+
+        if (!user) {
+            return res.status(400).send({
+                message: "Invalid Credentials"
+            })
+        }
+
+        const secret = user.tfa_secret !== '' ? user.tfa_secret : req.body.secret;
+
+        const verified = speakeasy.totp.verify({
+            secret,
+            encoding: 'ascii',
+            token: req.body.code
+        });
+
+        if (!verified) {
+            return res.status(400).send({
+                message: "Invalid Credentials"
+            })
+        };
+
+        if (user.tfa_secret === '') {
+            await repository.update(id, { tfa_secret: secret })
+        }
+
+        // ? For storing refresh token in the cookie and database
+        const accessToken = sign({ id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
+
+        const refreshToken = sign({ id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
+
+        // Determine the expiration time for the new refresh token based on rememberMe
+        const newRefreshTokenExpiration = req.body.rememberMe
+            ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year from now
+            : new Date(Date.now() + 30 * 1000); // 30 seconds from now
+
+        await myDataSource.getRepository(Token).save({
+            user_id: id,
+            token: refreshToken,
+            expired_at: newRefreshTokenExpiration
+        })
+
+        res.cookie('refresh_token', refreshToken, {
+            httpOnly: true,
+            expires: newRefreshTokenExpiration
+        })
+
+        res.send({
+            token: accessToken
+        });
+
+    } catch (error) {
+        logger.error(error.message)
+        return res.status(400).send({
+            message: "Unauthenticated"
+        })
     }
 }
 
@@ -118,30 +194,6 @@ export const QR = async (req: Request, res: Response) => {
             message: "Unauthenticated"
         })
     }
-}
-
-export const TwoFactor = async (req: Request, res: Response) => {
-    // const accessToken = sign({ id: user.id }, process.env.JWT_SECRET_ACCESS, { expiresIn: '30s' });
-
-    // const refreshToken = sign({ id: user.id }, process.env.JWT_SECRET_REFRESH, { expiresIn: '1w' });
-
-    // const expired_at = new Date()
-    // expired_at.setDate(expired_at.getDate() + 7)
-
-    // await myDataSource.getRepository(Token).save({
-    //     user_id: user.id,
-    //     token: refreshToken,
-    //     expired_at
-    // })
-
-    // res.cookie('refresh_token', refreshToken, {
-    //     httpOnly: true,
-    //     maxAge: 7 * 24 * 60 * 60 * 1000
-    // })
-
-    // res.send({
-    //     token: accessToken
-    // });
 }
 
 export const Refresh = async (req: Request, res: Response) => {
