@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import { User } from "../entity/user.entity";
 import logger from "../config/logger";
 import myDataSource from "../config/data-source";
-import * as argon2 from 'argon2'
-import * as speakeasy from 'speakeasy'
+import * as argon2 from 'argon2';
+import * as speakeasy from 'speakeasy';
 import { sign, verify } from "jsonwebtoken";
 import { Token } from "../entity/token.entity";
 import { MoreThanOrEqual } from "typeorm";
@@ -103,7 +103,21 @@ export const AuthenticatedUser = async (req: Request, res: Response) => {
             message: "Unauthenticated"
         })
     }
+}
 
+export const QR = async (req: Request, res: Response) => {
+    try {
+        const qrcode = require('qrcode')
+
+        qrcode.toDataURL('otpauth://totp/My%20App?secret=JM7HSOSLIRLWMNTPHZ5VW63FJY7WIKK2IZWWCQTGERRWORZOHR3Q', (err: any, data: any) => {
+            res.send(`<img src="${data}" />`)
+        })
+    } catch (error) {
+        logger.error(error.message)
+        return res.status(400).send({
+            message: "Unauthenticated"
+        })
+    }
 }
 
 export const TwoFactor = async (req: Request, res: Response) => {
