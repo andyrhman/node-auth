@@ -21,9 +21,9 @@ app.use(cors({
 myDataSource.initialize().then(() => {
     routes(app);
 
-    logger.info("Database has been initialized!");
+    logger.info("👍 Database has been initialized!");
     app.listen(5000, () => {
-        logger.info('Server listening on port 8000');
+        logger.info('🗃️ Server listening on port 8000');
     });
 }).catch((err) => {
     logger.error("Error during Data Source initialization:", err);
