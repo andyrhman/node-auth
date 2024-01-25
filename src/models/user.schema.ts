@@ -14,7 +14,7 @@ export interface UserDocument extends mongoose.Document {
 export const UserSchema = new mongoose.Schema({
     first_name: { type: String },
     last_name: { type: String },
-    username: { type: String, unique: true },
+    username: { type: String},
     email: { type: String, unique: true },
     password: { type: String },
     tfa_secret: { type: String, default: "" }

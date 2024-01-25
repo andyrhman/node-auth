@@ -22,6 +22,6 @@ app.use(cors({
 
 routes(app);
 
-app.listen(8000, () => {
+app.listen(5000, () => {
     logger.info('👍 Server listening on port 8000');
 });

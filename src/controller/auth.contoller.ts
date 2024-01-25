@@ -249,6 +249,18 @@ export const Logout = async (req: Request, res: Response) => {
     res.status(204).send(null);
 }
 
+// Google Auth Logic
+async function generateUniqueUsername(proposedUsername) {
+    let user = await User.findOne({ username: proposedUsername });
+    if (user) {
+        // ? If there is existing username inside db, generate a username
+        proposedUsername += Math.floor(Math.random() * 1000);
+        return generateUniqueUsername(proposedUsername);
+    } else {
+        // ? If there is no existing username, instead use the payload.given_name
+        return proposedUsername;
+    }
+}
 export const GoogleAuth = async (req: Request, res: Response) => {
     // ? Google auth logic
     const { token } = req.body;
@@ -270,10 +282,17 @@ export const GoogleAuth = async (req: Request, res: Response) => {
 
     let user = await User.findOne({ email: payload.email });
 
+    let nameArray = payload.name.split(" ");
+    let firstName = nameArray[0];
+    let lastName = nameArray[1];
+    let proposedUsername = payload.given_name.toLowerCase();
+
     if (!user) {
+        proposedUsername = await generateUniqueUsername(proposedUsername);
         user = await User.create({
-            first_name: payload.given_name,
-            last_name: payload.family_name,
+            first_name: firstName,
+            last_name: lastName,
+            username: proposedUsername,
             email: payload.email,
             password: await argon2.hash(token)
         })
