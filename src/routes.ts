@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { AuthenticatedUser, GoogleAuth, Login, Logout, QR, Refresh, Register, TwoFactor } from "./controller/auth.contoller";
-// import { ForgotPassword, ResetPassword } from "./controller/forgot.controller";
+import { ForgotPassword, ResetPassword } from "./controller/forgot.controller";
 
 const routes = (router: Router) => {
     router.post('/api/register', Register);
@@ -10,8 +10,8 @@ const routes = (router: Router) => {
     router.get('/api/user', AuthenticatedUser);
     router.post('/api/refresh', Refresh);
     router.post('/api/logout', Logout);
-    // router.post('/api/forgot', ForgotPassword);
-    // router.post('/api/reset', ResetPassword);
+    router.post('/api/forgot', ForgotPassword);
+    router.post('/api/reset', ResetPassword);
     router.get('/api/test', QR);
 }
 

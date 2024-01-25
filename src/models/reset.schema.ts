@@ -5,7 +5,7 @@ export interface ResetDocument extends mongoose.Document {
     email: string;
     token: string;
     expiresAt: number;
-    user: boolean;
+    used: boolean;
 }
 
 export const ResetSchema = new mongoose.Schema({
