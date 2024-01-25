@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 export interface UserDocument extends mongoose.Document {
+    toObject: any;
     _id: string;
     first_name: string;
     last_name: string;
