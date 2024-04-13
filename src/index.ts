@@ -22,7 +22,7 @@ myDataSource.initialize().then(() => {
     routes(app);
 
     logger.info("👍 Database has been initialized!");
-    app.listen(5000, () => {
+    app.listen(8000, () => {
         logger.info('🗃️ Server listening on port 8000');
     });
 }).catch((err) => {
