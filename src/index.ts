@@ -26,5 +26,5 @@ myDataSource.initialize().then(() => {
         logger.info('Server listening on port 8000');
     });
 }).catch((err) => {
-    logger.error("Error during Data Source initialization:", err);
+    logger.error(err);
 });
